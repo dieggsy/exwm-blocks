@@ -185,8 +185,8 @@ Uses the same format as `mode-line-format'"
                   (s-pad-left
                    (- (frame-width) 2)
                    " "
-                   response)
-                  (exwm-blocks-update)))))
+                   response))
+            (exwm-blocks-update))))
     (error nil)))
 
 ;;;###autoload
