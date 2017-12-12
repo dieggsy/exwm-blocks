@@ -108,19 +108,22 @@ Uses the same format as `mode-line-format'"
                                     background
                                     body)
   (let* ((face (or face
-                   `(:foreground
-                     ,(or foreground
-                          color)
-                     :background
-                     ,background)))
-         (block-name-str (concat "exwm-blocks-block-" (symbol-name name)))
-         (block-name (intern block-name-str)))
+                   `(,@(when (or color foreground)
+                         (list :foreground
+                           (or foreground
+                               color)))
+                     ,@(when background
+                         (list
+                          :background
+                          background)))))
+         (block-name-str (concat "exwm-blocks-" (symbol-name name)))
+         )
     (cond
      (script
-      (let ((timer (gethash block-name exwm-blocks--timers)))
+      (let ((timer (gethash name exwm-blocks--timers)))
         (when timer
           (cancel-timer timer)))
-      (puthash block-name
+      (puthash name
                (run-at-time 0
                             interval
                             `(lambda ()
@@ -132,12 +135,12 @@ Uses the same format as `mode-line-format'"
                                  (set-process-filter
                                   proc
                                   (lambda (_ out)
-                                    (puthash ',block-name
+                                    (puthash ',name
                                              (string-trim out)
                                              exwm-blocks--values)
                                     (exwm-blocks-update))))))
                exwm-blocks--timers)
-      (exwm-blocks-format-with-face `(gethash ',block-name exwm-blocks--values)
+      (exwm-blocks-format-with-face `(gethash ',name exwm-blocks--values)
                                     icon
                                     face))
      ((eq name 'battery-emacs)
