@@ -1,7 +1,6 @@
 (require 'time)
 (require 'battery)
 (require 's)
-(require 'dash)
 (require 'json)
 
 (defconst exwm-blocks--buffer " *Minibuf-0*")
@@ -75,54 +74,73 @@ Uses the same format as `mode-line-format'")
              exwm-blocks-separator)))))
 
 (defmacro exwm-blocks--defvar (name)
-  `(defvar ,name ""))
+  `(defvar ,name nil))
 
-(defun exwm-blocks-format-with-color (icn-or-txt &optional txt color)
-  (if txt
-      )
-  )
+(defun exwm-blocks-format-with-face (txt &optional icn face)
+  (let* ((txt (if (and face (eq exwm-blocks-propertize 'text))
+                  `(propertize ,txt 'face ',face)
+                txt))
+         (icn (if (and face (eq exwm-blocks-propertize 'icon))
+                  `(propertize ,icn 'face ',face)
+                icn))
+         (fmt (if icn
+                  `(format "%s %s" ,icn ,txt)
+                `(format "%s" ,txt))))
+    (if (and face (eq exwm-blocks-propertize 'all))
+        `(propertize ,fmt 'face ',face)
+      fmt)))
 
 (cl-defun exwm-blocks-define-block (name
                                     &key
-                                    fmt
-                                    interval
                                     icon
-                                    color
                                     script
+                                    interval
+                                    fmt
+                                    face
+                                    foreground
+                                    color
+                                    background
                                     body)
-  (let* ((block-name-str (concat "exwm-blocks-block-" (symbol-name name)))
-         (block-name (intern block-name-str)))
+  (let* ((face (or face
+                   `(:foreground
+                     ,(or foreground
+                          color)
+                     :background
+                     ,background)))
+         (block-name-str (concat "exwm-blocks-block-" (symbol-name name)))
+         (block-name (intern block-name-str))
+         (block-timer-name (intern (concat block-name-str "-timer"))))
     (cond
      (script
       (exwm-blocks--defvar block-name)
-      (run-at-time 0
-                   interval
-                   `(lambda ()
-                      (let ((proc
-                             (start-process-shell-command
-                              ,block-name-str
-                              nil
-                              ,script)))
-                        (set-process-filter
-                         proc
-                         (lambda (_ out)
-                           (setq ,block-name (string-trim out))
-                           (exwm-blocks-update))))))
-      (if icon
-          `(format "%s %s" ,icon ,block-name )
-        `(format "%s" ,block-name)))
+      (exwm-blocks--defvar block-timer-name)
+      (when (and (boundp block-timer-name)
+                 (timerp (symbol-value block-timer-name)))
+        (cancel-timer (symbol-value block-timer-name)))
+      (set block-timer-name
+           (run-at-time 0
+                        interval
+                        `(lambda ()
+                           (let ((proc
+                                  (start-process-shell-command
+                                   ,block-name-str
+                                   nil
+                                   ,script)))
+                             (set-process-filter
+                              proc
+                              (lambda (_ out)
+                                (setq ,block-name (string-trim out))
+                                (exwm-blocks-update)))))))
+      (exwm-blocks-format-with-face block-name icon face)
+      )
      ((eq name 'battery-emacs)
       (display-battery-mode)
       (setq battery-mode-line-format (or fmt battery-mode-line-format))
-      (if icon
-          `(format "%s %s" ,icon battery-mode-line-string)
-        `(format "%s" battery-mode-line-string)))
+      (exwm-blocks-format-with-face 'battery-mode-line-string icon face))
      ((eq name 'time-emacs)
       (display-time-mode)
       (setq display-time-format (or fmt display-time-format))
-      (if icon
-          `(format "%s %s" ,icon display-time-string)
-        `(format "%s" display-time-string))))))
+      (exwm-blocks-format-with-face 'display-time-string icon face)))))
 
 (defun exwm-blocks--add-advices ()
   (advice-add 'display-time-update :after #'exwm-blocks-update)
