@@ -37,7 +37,9 @@
       (format " %s"
               display-time-string))))
   "Specification of the contens of exwm-blocks.
-Uses the same format as `mode-line-format'")
+Uses the same format as `mode-line-format'"
+  :group 'exwm-blocks
+  :type 'sexp)
 
 (defun exwm-blocks-message-preserve-blocks (fn fmt-string &rest args)
   (apply fn
