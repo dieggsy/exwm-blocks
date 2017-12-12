@@ -124,47 +124,6 @@ Uses the same format as `mode-line-format'")
           `(format "%s %s" ,icon display-time-string)
         `(format "%s" display-time-string))))))
 
-
-(exwm-blocks-set
- ;; :script-fmt "~/bin/i3blocks/%s"
- ;; (dropbox
- ;;  :interval 2
- ;;  :color "#3FD7e5")
- ;; (music
- ;;  :interval 5
- ;;  :color "#FE8019")
- ;; (weather
- ;;  :interval 60
- ;;  :color "#8EC07C")
- ;; (layout
- ;;  :interval)
- ;; (volume
- ;;  :interval 'once
- ;;  )
- (wifi
-  :icon ""
-  :interval 2
-  :script "iwgetid -r || echo 'None'"
-  :color "#B8BB26")
- (battery-emacs
-  :icon (let ((num (string-to-number battery-mode-line-string)))
-          (cond ((> num 95)
-                 "")
-                ((> num 75)
-                 "")
-                ((> num 50)
-                 "")
-                ((> num 25)
-                 "")
-                ((<= num 25)
-                 "")))
-  :color "#83A598"
-  :fmt "%p")
- (time-emacs
-  :icon ""
-  :color "#A89984"
-  :fmt "%Y-%d-%m %H:%M"))
-
 (defun exwm-blocks--add-advices ()
   (advice-add 'display-time-update :after #'exwm-blocks-update)
   (advice-add 'battery-update :after #'exwm-blocks-update)
