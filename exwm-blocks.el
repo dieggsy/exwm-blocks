@@ -42,19 +42,21 @@ Uses the same format as `mode-line-format'"
   :type 'sexp)
 
 (defun exwm-blocks-message-preserve-blocks (fn fmt-string &rest args)
-  (apply fn
-         (cons
-          (concat fmt-string
-                  (s-pad-left
-                   (+ (frame-width) exwm-blocks-adjust
-                      (-
-                       (if fmt-string
-                           (length (apply #'format (cons fmt-string args)))
-                         0)))
-                   " "
-                   (s-trim-left
-                    (format-mode-line exwm-blocks-format))))
-          args)))
+  (apply fn fmt-string args)
+  (let (message-log-max)
+    (apply fn
+           (cons
+            (concat fmt-string
+                    (s-pad-left
+                     (+ (frame-width) exwm-blocks-adjust
+                        (-
+                         (if fmt-string
+                             (length (apply #'format (cons fmt-string args)))
+                           0)))
+                     " "
+                     (s-trim-left
+                      (format-mode-line exwm-blocks-format))))
+            args))))
 
 (defun exwm-blocks-update ()
   (with-current-buffer exwm-blocks--buffer
