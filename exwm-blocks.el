@@ -92,6 +92,10 @@ Uses the same format as `mode-line-format'"
         `(propertize ,fmt 'face ',face)
       fmt)))
 
+(defvar exwm-blocks--values (make-hash-table))
+
+(defvar exwm-blocks--timers (make-hash-table))
+
 (cl-defun exwm-blocks-define-block (name
                                     &key
                                     icon
@@ -110,31 +114,32 @@ Uses the same format as `mode-line-format'"
                      :background
                      ,background)))
          (block-name-str (concat "exwm-blocks-block-" (symbol-name name)))
-         (block-name (intern block-name-str))
-         (block-timer-name (intern (concat block-name-str "-timer"))))
+         (block-name (intern block-name-str)))
     (cond
      (script
-      (exwm-blocks--defvar block-name)
-      (exwm-blocks--defvar block-timer-name)
-      (when (and (boundp block-timer-name)
-                 (timerp (symbol-value block-timer-name)))
-        (cancel-timer (symbol-value block-timer-name)))
-      (set block-timer-name
-           (run-at-time 0
-                        interval
-                        `(lambda ()
-                           (let ((proc
-                                  (start-process-shell-command
-                                   ,block-name-str
-                                   nil
-                                   ,script)))
-                             (set-process-filter
-                              proc
-                              (lambda (_ out)
-                                (setq ,block-name (string-trim out))
-                                (exwm-blocks-update)))))))
-      (exwm-blocks-format-with-face block-name icon face)
-      )
+      (let ((timer (gethash block-name exwm-blocks--timers)))
+        (when timer
+          (cancel-timer timer)))
+      (puthash block-name
+               (run-at-time 0
+                            interval
+                            `(lambda ()
+                               (let ((proc
+                                      (start-process-shell-command
+                                       ,block-name-str
+                                       nil
+                                       ,script)))
+                                 (set-process-filter
+                                  proc
+                                  (lambda (_ out)
+                                    (puthash ',block-name
+                                             (string-trim out)
+                                             exwm-blocks--values)
+                                    (exwm-blocks-update))))))
+               exwm-blocks--timers)
+      (exwm-blocks-format-with-face `(gethash ',block-name exwm-blocks--values)
+                                    icon
+                                    face))
      ((eq name 'battery-emacs)
       (display-battery-mode)
       (setq battery-mode-line-format (or fmt battery-mode-line-format))
