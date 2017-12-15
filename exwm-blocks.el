@@ -47,7 +47,7 @@ Uses the same format as `mode-line-format'"
 
 (defvar exwm-blocks--timers (make-hash-table))
 
-(cl-defmacro exwm-blocks-exec (&rest args &key block name &allow-other-keys)
+(cl-defun exwm-blocks-exec (&rest args &key block name &allow-other-keys)
   (declare (indent defun))
   (cl-remf args :block)
   (cl-remf args :name)
@@ -97,27 +97,23 @@ Uses the same format as `mode-line-format'"
 
 (defun exwm-blocks-create-map (bindings)
   (let ((map (make-sparse-keymap)))
-    (cl-macrolet ((blocks-exec
-                   (lst)
-                   `(exwm-blocks-exec ,@list)))
-      (cl-loop
-       for (key func) on bindings by #'cddr
-       do  (let* ((key (if (stringp key) (kbd key) key))
-                  (func (if (and (listp func) (eq (car func) 'exec))
-                            (blocks-exec (cdr func))
-                          func))
-                  (func (cond ((symbolp func)
-                               (symbol-value func))
-                              ((functionp func)
-                               func)
-                              ((and (consp func) (or (eq (car func) 'function)
-                                                     (eq (car func) 'quote)))
-                               (cadr func))
-                              (t
-                               `(lambda ()
-                                  (interactive)
-                                  ,func)))))
-             (define-key map key func))))
+    (cl-loop
+     for (key func) on bindings by #'cddr
+     do  (let* ((key (if (stringp key) (kbd key) key))
+                (func (cond ((and (listp func) (eq (car func) 'exec))
+                             (apply #'exwm-blocks-exec (cdr func)))
+                            ((symbolp func)
+                             (symbol-value func))
+                            ((functionp func)
+                             func)
+                            ((and (consp func) (or (eq (car func) 'function)
+                                                   (eq (car func) 'quote)))
+                             (cadr func))
+                            (t
+                             `(lambda ()
+                                (interactive)
+                                ,func)))))
+           (define-key map key func)))
     map))
 
 (defun exwm-block-value (value)
