@@ -53,28 +53,26 @@ determine the script to call if :script and :elisp are omitted."
 
 (defvar exwm-blocks--timers (make-hash-table))
 
-(cl-defun exwm-blocks-exec (&rest args &key block name &allow-other-keys)
+(cl-defun exwm-blocks-exec (&key block name script filter)
   (declare (indent defun))
-  (cl-remf args :block)
-  (cl-remf args :name)
-  (or (gethash (car args) exwm-blocks--saved-cmds)
+  (or (gethash name exwm-blocks--saved-cmds)
       (if (not block)
           `(lambda ()
              (interactive)
              (start-process-shell-command
-              ,(car args)
+              script
               nil
-              ,(car args)))
+              script))
         (let ((func
                `(lambda ()
                   (interactive)
                   (let ((proc
                          (start-process-shell-command
-                          ,(or name (car args))
+                          ,(or name script)
                           nil
-                          ,(car args))))
-                    ,(cond ((cdr args)
-                            `(set-process-filter proc ,(cadr args)))
+                          ,script)))
+                    ,(cond (filter
+                            `(set-process-filter proc ,filter))
                            (block
                                `(set-process-filter
                                  proc
@@ -104,13 +102,21 @@ determine the script to call if :script and :elisp are omitted."
      (when exwm-blocks-mode
        (exwm-blocks-update))))
 
-(defun exwm-blocks-create-map (bindings)
+(defun exwm-blocks-create-map (bindings block)
   (let ((map (make-sparse-keymap)))
     (cl-loop
      for (key func) on bindings by #'cddr
      do  (let* ((key (if (stringp key) (kbd key) key))
                 (func (cond ((and (listp func) (eq (car func) 'exec))
-                             (apply #'exwm-blocks-exec (cdr func)))
+                             (let* ((args (cdr func))
+                                    (script-pos (cl-position-if #'stringp args)))
+                               (setf (nthcdr script-pos args) (cons :script (nthcdr script-pos args)))
+                               (apply #'exwm-blocks-exec args)))
+                            ((and (listp func) (eq (car func) 'exec*))
+                             (let* ((args (cdr func))
+                                    (script-pos (cl-position-if #'stringp args)))
+                               (setf (nthcdr script-pos args) (cons :script (nthcdr script-pos args)))
+                               (apply #'exwm-blocks-exec (append args `(:block ,block)))))
                             ((symbolp func)
                              (symbol-value func))
                             ((functionp func)
@@ -193,7 +199,7 @@ determine the script to call if :script and :elisp are omitted."
                           (list :foreground foreground))
                          (background
                           (list :background background)))))
-         (map (exwm-blocks-create-map bindings))
+         (map (exwm-blocks-create-map bindings name))
          (block-name-str (concat "exwm-blocks-" (symbol-name name))))
     `(propertize
       (format
