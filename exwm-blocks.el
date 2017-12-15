@@ -82,18 +82,21 @@ Uses the same format as `mode-line-format'"
           func))))
 
 (cl-defmacro exwm-blocks-set (&rest blocks)
-  `(setq exwm-blocks-format
-         '(:eval
-           (s-pad-left
-            (+ (frame-width) exwm-blocks-adjust)
-            " "
-            (string-join
-             (list
-              ,@(mapcar
-                 (lambda (block)
-                   (apply #'exwm-blocks-define-block block))
-                 blocks))
-             exwm-blocks-separator)))))
+  `(progn
+     (setq exwm-blocks-format
+           '(:eval
+             (s-pad-left
+              (+ (frame-width) exwm-blocks-adjust)
+              " "
+              (string-join
+               (list
+                ,@(mapcar
+                   (lambda (block)
+                     (apply #'exwm-blocks-define-block block))
+                   blocks))
+               exwm-blocks-separator))))
+     (when exwm-blocks-mode
+       (exwm-blocks-update))))
 
 (defun exwm-blocks-create-map (bindings)
   (let ((map (make-sparse-keymap)))
