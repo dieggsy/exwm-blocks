@@ -40,6 +40,12 @@ Uses the same format as `mode-line-format'"
   :group 'exwm-blocks
   :type 'sexp)
 
+(defcustom exwm-blocks-script-format "%s"
+  "A format string or function applied to the block name to
+determine the script to call if :script and :elisp are omitted."
+  :group 'exwm-blocks
+  :type '(choice function string))
+
 ;;* Block def
 (defvar exwm-blocks--saved-cmds (make-hash-table))
 
@@ -150,10 +156,24 @@ Uses the same format as `mode-line-format'"
              (run-at-time 0 interval update-fn)
              exwm-blocks--timers)))
 
+(defun exwm-blocks--determine-script (name script args elisp)
+  (let ((script-default
+         (if (functionp exwm-blocks-script-format)
+             (funcall exwm-blocks-script-format (symbol-name name))
+           (format exwm-blocks-script-format (symbol-name name)))))
+    (cond (elisp
+           nil)
+          ((stringp script)
+           script)
+          (args
+           (concat script-default args))
+          (t script-default))))
+
 (cl-defun exwm-blocks-define-block (name
                                     &key
                                     icon
                                     script
+                                    args
                                     filter
                                     interval
                                     fmt
@@ -163,7 +183,8 @@ Uses the same format as `mode-line-format'"
                                     background
                                     bindings
                                     elisp)
-  (let* ((foreground (or foreground color))
+  (let* ((script (exwm-blocks--determine-script name script args elisp))
+         (foreground (or foreground color))
          (face (or face
                    (cond ((and foreground background)
                           (list :foreground foreground
