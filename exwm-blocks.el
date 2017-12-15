@@ -63,6 +63,42 @@ Uses the same format as `mode-line-format'"
     (erase-buffer)
     (insert (format-mode-line exwm-blocks-format))))
 
+(defvar exwm-blocks--saved-cmds (make-hash-table))
+
+(cl-defmacro exwm-blocks-exec (&rest args &key block name &allow-other-keys)
+  (declare (indent defun))
+  (cl-remf args :block)
+  (cl-remf args :name)
+  (or (gethash (car args) exwm-blocks--saved-cmds)
+      (if (not block)
+          `(lambda ()
+             (interactive)
+             (start-process-shell-command
+              ,(car args)
+              nil
+              ,(car args)))
+        (let ((func
+               `(lambda ()
+                  (interactive)
+                  (let ((proc
+                         (start-process-shell-command
+                          ,(or (symbol-name name) (car args))
+                          nil
+                          ,(car args))))
+                    ,(cond ((cdr args)
+                            `(set-process-filter proc ,(cadr args)))
+                           (block
+                               `(set-process-filter
+                                 proc
+                                 (lambda (_ out)
+                                   (puthash ',block
+                                            (string-trim out)
+                                            exwm-blocks--values)
+                                   (exwm-blocks-update)))))))))
+          (when name
+            (puthash name func exwm-blocks--saved-cmds))
+          func))))
+
 (cl-defmacro exwm-blocks-set (&rest blocks)
   `(setq exwm-blocks-format
          '(:eval
@@ -90,6 +126,16 @@ Uses the same format as `mode-line-format'"
 
 (defvar exwm-blocks--timers (make-hash-table))
 
+;; (defun exwm-blocks-create-map (bindings)
+;;   (let ((map (make-sparse-keymap)))
+;;     (cl-loop for (key func) on bindings by #'cddr
+;;              do (cond )
+;;              )
+;;     map))
+
+(defun exwm-block-value (value)
+  (gethash value exwm-blocks--values))
+
 (cl-defun exwm-blocks-define-block (name
                                     &key
                                     icon
@@ -100,7 +146,8 @@ Uses the same format as `mode-line-format'"
                                     foreground
                                     color
                                     background
-                                    body)
+                                    bindings
+                                    elisp)
   (let* ((face (or face
                    `(,@(when (or color foreground)
                          (list :foreground
@@ -110,8 +157,7 @@ Uses the same format as `mode-line-format'"
                          (list
                           :background
                           background)))))
-         (block-name-str (concat "exwm-blocks-" (symbol-name name)))
-         )
+         (block-name-str (concat "exwm-blocks-" (symbol-name name))))
     (cond
      (script
       (let ((timer (gethash name exwm-blocks--timers)))
