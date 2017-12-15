@@ -126,12 +126,23 @@ Uses the same format as `mode-line-format'"
 
 (defvar exwm-blocks--timers (make-hash-table))
 
-;; (defun exwm-blocks-create-map (bindings)
-;;   (let ((map (make-sparse-keymap)))
-;;     (cl-loop for (key func) on bindings by #'cddr
-;;              do (cond )
-;;              )
-;;     map))
+(defun exwm-blocks-create-map (bindings)
+  (let ((map (make-sparse-keymap)))
+    (cl-loop for (key func) on bindings by #'cddr
+             do (progn
+                  (cond ((symbolp func)
+                         (setq func (symbol-value func)))
+                        ((and (consp func)
+                              (member (car func) '(quote function)))
+                         (setq func (cadr func))))
+                  (cond ((stringp key)
+                         (define-key map (kbd key) func))
+                        ((vectorp key)
+                         (define-key map key func))
+                        ((and (consp key) (eq (car key) 'kbd))
+                         (define-key map (kbd (cadr key)) func)))))
+    map))
+
 
 (defun exwm-block-value (value)
   (gethash value exwm-blocks--values))
