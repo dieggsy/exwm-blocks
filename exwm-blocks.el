@@ -211,6 +211,7 @@ Uses the same format as `mode-line-format'"
             args))))
 
 (defun exwm-blocks-update ()
+  (interactive)
   (with-current-buffer exwm-blocks--buffer
     (erase-buffer)
     (insert (format-mode-line exwm-blocks-format))))
