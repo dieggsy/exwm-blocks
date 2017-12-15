@@ -70,7 +70,7 @@ determine the script to call if :script and :elisp are omitted."
                   (interactive)
                   (let ((proc
                          (start-process-shell-command
-                          ,(or (symbol-name name) (car args))
+                          ,(or name (car args))
                           nil
                           ,(car args))))
                     ,(cond ((cdr args)
