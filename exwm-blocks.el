@@ -163,17 +163,18 @@ determine the script to call if :script and :elisp are omitted."
              exwm-blocks--timers)))
 
 (defun exwm-blocks--determine-script (name script args elisp)
-  (let ((script-default
-         (if (functionp exwm-blocks-script-format)
-             (funcall exwm-blocks-script-format (symbol-name name))
-           (format exwm-blocks-script-format (symbol-name name)))))
-    (cond (elisp
-           nil)
-          ((stringp script)
-           script)
-          (args
-           (concat script-default args))
-          (t script-default))))
+  (unless (member name '(battery-emacs time-emacs))
+    (let ((script-default
+           (if (functionp exwm-blocks-script-format)
+               (funcall exwm-blocks-script-format (symbol-name name))
+             (format exwm-blocks-script-format (symbol-name name)))))
+      (cond (elisp
+             nil)
+            ((stringp script)
+             script)
+            (args
+             (concat script-default " " args))
+            (t script-default)))))
 
 (cl-defun exwm-blocks-define-block (name
                                     &key
