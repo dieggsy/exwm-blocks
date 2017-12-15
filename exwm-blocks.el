@@ -158,39 +158,40 @@ Uses the same format as `mode-line-format'"
                           :background
                           background)))))
          (block-name-str (concat "exwm-blocks-" (symbol-name name))))
-    (cond
-     (script
-      (let ((timer (gethash name exwm-blocks--timers)))
-        (when timer
-          (cancel-timer timer)))
-      (puthash name
-               (run-at-time 0
-                            interval
-                            `(lambda ()
-                               (let ((proc
-                                      (start-process-shell-command
-                                       ,block-name-str
-                                       nil
-                                       ,script)))
-                                 (set-process-filter
-                                  proc
-                                  (lambda (_ out)
-                                    (puthash ',name
-                                             (string-trim out)
-                                             exwm-blocks--values)
-                                    (exwm-blocks-update))))))
-               exwm-blocks--timers)
-      (exwm-blocks-format-with-face `(gethash ',name exwm-blocks--values)
-                                    icon
-                                    face))
-     ((eq name 'battery-emacs)
-      (display-battery-mode)
-      (setq battery-mode-line-format (or fmt battery-mode-line-format))
-      (exwm-blocks-format-with-face 'battery-mode-line-string icon face))
-     ((eq name 'time-emacs)
-      (display-time-mode)
-      (setq display-time-format (or fmt display-time-format))
-      (exwm-blocks-format-with-face 'display-time-string icon face)))))
+    (exwm-blocks-format-with-face
+     (cond
+      (script
+       (let ((timer (gethash name exwm-blocks--timers)))
+         (when timer
+           (cancel-timer timer)))
+       (puthash name
+                (run-at-time 0
+                             interval
+                             `(lambda ()
+                                (let ((proc
+                                       (start-process-shell-command
+                                        ,block-name-str
+                                        nil
+                                        ,script)))
+                                  (set-process-filter
+                                   proc
+                                   (lambda (_ out)
+                                     (puthash ',name
+                                              (string-trim out)
+                                              exwm-blocks--values)
+                                     (exwm-blocks-update))))))
+                exwm-blocks--timers)
+       `(gethash ',name exwm-blocks--values))
+      ((eq name 'battery-emacs)
+       (display-battery-mode)
+       (setq battery-mode-line-format (or fmt battery-mode-line-format))
+       'battery-mode-line-string)
+      ((eq name 'time-emacs)
+       (display-time-mode)
+       (setq display-time-format (or fmt display-time-format))
+       'display-time-string))
+     icon
+     face)))
 
 (defun exwm-blocks--add-advices ()
   (advice-add 'display-time-update :after #'exwm-blocks-update)
