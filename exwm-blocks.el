@@ -129,18 +129,8 @@ Uses the same format as `mode-line-format'"
 (defun exwm-blocks-create-map (bindings)
   (let ((map (make-sparse-keymap)))
     (cl-loop for (key func) on bindings by #'cddr
-             do (progn
-                  (cond ((symbolp func)
-                         (setq func (symbol-value func)))
-                        ((and (consp func)
-                              (member (car func) '(quote function)))
-                         (setq func (cadr func))))
-                  (cond ((stringp key)
-                         (define-key map (kbd key) func))
-                        ((vectorp key)
-                         (define-key map key func))
-                        ((and (consp key) (eq (car key) 'kbd))
-                         (define-key map (kbd (cadr key)) func)))))
+             as key = (if (stringp key) (kbd key) key)
+             do (define-key map key func))
     map))
 
 
@@ -168,6 +158,7 @@ Uses the same format as `mode-line-format'"
                          (list
                           :background
                           background)))))
+         (map (exwm-blocks-create-map bindings))
          (block-name-str (concat "exwm-blocks-" (symbol-name name))))
     (exwm-blocks-format-with-face
      (cond
@@ -202,7 +193,8 @@ Uses the same format as `mode-line-format'"
        (setq display-time-format (or fmt display-time-format))
        'display-time-string))
      icon
-     face)))
+     face
+     map)))
 
 (defun exwm-blocks--add-advices ()
   (advice-add 'display-time-update :after #'exwm-blocks-update)
