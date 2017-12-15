@@ -9,12 +9,12 @@
   "Echo area status bar for exwm."
   :group 'exwm)
 
-(defcustom exwm-blocks-propertize 'all
-  "Which part of the block to propertize."
-  :group 'exwm-blocks
-  :type '(choice (const :tag "Whole block" all)
-                 (const :tag "Only icon" icon)
-                 (const :tag "Only text" text)))
+;; (defcustom exwm-blocks-propertize 'all
+;;   "Which part of the block to propertize."
+;;   :group 'exwm-blocks
+;;   :type '(choice (const :tag "Whole block" all)
+;;                  (const :tag "Only icon" icon)
+;;                  (const :tag "Only text" text)))
 
 (defcustom exwm-blocks-adjust -2
   "Amount to adjust exwm-blocks status by."
@@ -80,19 +80,11 @@ Uses the same format as `mode-line-format'"
 (defmacro exwm-blocks--defvar (name)
   `(defvar ,name nil))
 
-(defun exwm-blocks-format-with-face (txt &optional icn face)
-  (let* ((txt (if (and face (eq exwm-blocks-propertize 'text))
-                  `(propertize ,txt 'face ',face)
-                txt))
-         (icn (if (and face (eq exwm-blocks-propertize 'icon))
-                  `(propertize ,icn 'face ',face)
-                icn))
-         (fmt (if icn
+(defun exwm-blocks-format-with-face (txt &optional icn face local-map)
+  (let* ((fmt (if icn
                   `(format "%s %s" ,icn ,txt)
                 `(format "%s" ,txt))))
-    (if (and face (eq exwm-blocks-propertize 'all))
-        `(propertize ,fmt 'face ',face)
-      fmt)))
+    `(propertize ,fmt 'face ',face 'local-map ,local-map)))
 
 (defvar exwm-blocks--values (make-hash-table))
 
