@@ -3,8 +3,7 @@
 (require 's)
 (require 'json)
 
-(defconst exwm-blocks--buffer " *Minibuf-0*")
-
+;;* Custom
 (defgroup exwm-blocks nil
   "Echo area status bar for exwm."
   :group 'exwm)
@@ -41,29 +40,12 @@ Uses the same format as `mode-line-format'"
   :group 'exwm-blocks
   :type 'sexp)
 
-(defun exwm-blocks-message-preserve-blocks (fn fmt-string &rest args)
-  (apply fn fmt-string args)
-  (let (message-log-max)
-    (apply fn
-           (cons
-            (concat fmt-string
-                    (s-pad-left
-                     (+ (frame-width) exwm-blocks-adjust
-                        (-
-                         (if fmt-string
-                             (length (apply #'format (cons fmt-string args)))
-                           0)))
-                     " "
-                     (s-trim-left
-                      (format-mode-line exwm-blocks-format))))
-            args))))
-
-(defun exwm-blocks-update ()
-  (with-current-buffer exwm-blocks--buffer
-    (erase-buffer)
-    (insert (format-mode-line exwm-blocks-format))))
-
+;;* Block def
 (defvar exwm-blocks--saved-cmds (make-hash-table))
+
+(defvar exwm-blocks--values (make-hash-table))
+
+(defvar exwm-blocks--timers (make-hash-table))
 
 (cl-defmacro exwm-blocks-exec (&rest args &key block name &allow-other-keys)
   (declare (indent defun))
@@ -113,29 +95,55 @@ Uses the same format as `mode-line-format'"
                  blocks))
              exwm-blocks-separator)))))
 
-(defmacro exwm-blocks--defvar (name)
-  `(defvar ,name nil))
-
-(defun exwm-blocks-format-with-face (txt &optional icn face local-map)
-  (let* ((fmt (if icn
-                  `(format "%s %s" ,icn ,txt)
-                `(format "%s" ,txt))))
-    `(propertize ,fmt 'face ',face 'local-map ,local-map)))
-
-(defvar exwm-blocks--values (make-hash-table))
-
-(defvar exwm-blocks--timers (make-hash-table))
-
 (defun exwm-blocks-create-map (bindings)
   (let ((map (make-sparse-keymap)))
-    (cl-loop for (key func) on bindings by #'cddr
-             as key = (if (stringp key) (kbd key) key)
-             do (define-key map key func))
+    (cl-macrolet ((blocks-exec
+                   (lst)
+                   `(exwm-blocks-exec ,@list)))
+      (cl-loop
+       for (key func) on bindings by #'cddr
+       do  (let* ((key (if (stringp key) (kbd key) key))
+                  (func (if (and (listp func) (eq (car func) 'exec))
+                            (blocks-exec (cdr func))
+                          func))
+                  (func (cond ((symbolp func)
+                               (symbol-value func))
+                              ((functionp func)
+                               func)
+                              ((and (consp func) (or (eq (car func) 'function)
+                                                     (eq (car func) 'quote)))
+                               (cadr func))
+                              (t
+                               `(lambda ()
+                                  (interactive)
+                                  ,func)))))
+             (define-key map key func))))
     map))
-
 
 (defun exwm-block-value (value)
   (gethash value exwm-blocks--values))
+
+(defun exwm-blocks--handle-shell-process (name script &optional filter)
+  (let ((timer (gethash name exwm-blocks--timers)))
+    (when timer
+      (cancel-timer timer)))
+  (let* ((filter (or filter `(lambda (_ out)
+                               (puthash ',name
+                                        (string-trim out)
+                                        exwm-blocks--values)
+                               (exwm-blocks-update))))
+         (update-fn `(lambda ()
+                       (let ((proc
+                              (start-process-shell-command
+                               ,block-name-str
+                               nil
+                               ,script)))
+                         (set-process-filter
+                          proc
+                          ,filter)))))
+    (puthash name
+             (run-at-time 0 interval update-fn)
+             exwm-blocks--timers)))
 
 (cl-defun exwm-blocks-define-block (name
                                     &key
@@ -149,64 +157,76 @@ Uses the same format as `mode-line-format'"
                                     background
                                     bindings
                                     elisp)
-  (let* ((face (or face
-                   `(,@(when (or color foreground)
-                         (list :foreground
-                           (or foreground
-                               color)))
-                     ,@(when background
-                         (list
-                          :background
-                          background)))))
+  (let* ((foreground (or foreground color))
+         (face (or face
+                   (cond ((and foreground background)
+                          (list :foreground foreground
+                                :background background))
+                         (foreground
+                          (list :foreground foreground))
+                         (background
+                          (list :background background)))))
          (map (exwm-blocks-create-map bindings))
          (block-name-str (concat "exwm-blocks-" (symbol-name name))))
-    (exwm-blocks-format-with-face
-     (cond
-      (script
-       (let ((timer (gethash name exwm-blocks--timers)))
-         (when timer
-           (cancel-timer timer)))
-       (puthash name
-                (run-at-time 0
-                             interval
-                             `(lambda ()
-                                (let ((proc
-                                       (start-process-shell-command
-                                        ,block-name-str
-                                        nil
-                                        ,script)))
-                                  (set-process-filter
-                                   proc
-                                   (lambda (_ out)
-                                     (puthash ',name
-                                              (string-trim out)
-                                              exwm-blocks--values)
-                                     (exwm-blocks-update))))))
-                exwm-blocks--timers)
-       `(gethash ',name exwm-blocks--values))
-      ((eq name 'battery-emacs)
-       (display-battery-mode)
-       (setq battery-mode-line-format (or fmt battery-mode-line-format))
-       'battery-mode-line-string)
-      ((eq name 'time-emacs)
-       (display-time-mode)
-       (setq display-time-format (or fmt display-time-format))
-       'display-time-string))
-     icon
-     face
-     map)))
+    `(propertize
+      (format
+       "%s%s%s"
+       ,(or icon "")
+       ,(if icon " " "")
+       ,(cond
+         (script
+          (exwm-blocks--handle-shell-process name script)
+          `(gethash ',name exwm-blocks--values))
+         ((eq name 'battery-emacs)
+          (display-battery-mode)
+          (setq battery-mode-line-format (or fmt battery-mode-line-format))
+          'battery-mode-line-string)
+         ((eq name 'time-emacs)
+          (display-time-mode)
+          (setq display-time-format (or fmt display-time-format))
+          'display-time-string)))
+      'face
+      ',face
+      'local-map
+      ',map)))
+
+
+;;* Mode
+(defconst exwm-blocks--buffer " *Minibuf-0*")
+
+(defun exwm-blocks--message (fn fmt-string &rest args)
+  (apply fn fmt-string args)
+  (let (message-log-max)
+    (apply fn
+           (cons
+            (concat fmt-string
+                    (s-pad-left
+                     (+ (frame-width) exwm-blocks-adjust
+                        (-
+                         (if fmt-string
+                             (length (apply #'format (cons fmt-string args)))
+                           0)))
+                     " "
+                     (s-trim-left
+                      (format-mode-line exwm-blocks-format))))
+            args))))
+
+(defun exwm-blocks-update ()
+  (with-current-buffer exwm-blocks--buffer
+    (erase-buffer)
+    (insert (format-mode-line exwm-blocks-format))))
 
 (defun exwm-blocks--add-advices ()
   (advice-add 'display-time-update :after #'exwm-blocks-update)
   (advice-add 'battery-update :after #'exwm-blocks-update)
-  (advice-add 'user-error :around #'exwm-blocks-message-preserve-blocks)
-  (advice-add 'message :around #'exwm-blocks-message-preserve-blocks))
+  (advice-add 'user-error :around #'exwm-blocks--message)
+  (advice-add 'message :around #'exwm-blocks--message))
 
 (defun exwm-blocks--remove-advices ()
   (advice-remove 'display-time-update #'exwm-blocks-update)
   (advice-remove 'battery-update #'exwm-blocks-update)
-  (advice-remove 'user-error #'exwm-blocks-message-preserve-blocks)
-  (advice-remove 'message #'exwm-blocks-message-preserve-blocks))
+  (advice-remove 'user-error #'exwm-blocks--message)
+  (advice-remove 'message #'exwm-blocks--message))
 
 ;;;###autoload
 (define-minor-mode exwm-blocks-mode
