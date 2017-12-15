@@ -126,11 +126,17 @@ Uses the same format as `mode-line-format'"
   (let ((timer (gethash name exwm-blocks--timers)))
     (when timer
       (cancel-timer timer)))
-  (let* ((filter (or filter `(lambda (_ out)
-                               (puthash ',name
-                                        (string-trim out)
-                                        exwm-blocks--values)
-                               (exwm-blocks-update))))
+  (let* ((filter (or (and filter
+                          `(lambda (<proc> <out>)
+                             (puthash ',name
+                                      ,filter
+                                      exwm-blocks--values)
+                             (exwm-blocks-update)))
+                     `(lambda (_ out)
+                        (puthash ',name
+                                 (string-trim out)
+                                 exwm-blocks--values)
+                        (exwm-blocks-update))))
          (update-fn `(lambda ()
                        (let ((proc
                               (start-process-shell-command
@@ -148,6 +154,7 @@ Uses the same format as `mode-line-format'"
                                     &key
                                     icon
                                     script
+                                    filter
                                     interval
                                     fmt
                                     face
@@ -174,7 +181,7 @@ Uses the same format as `mode-line-format'"
        ,(if icon " " "")
        ,(cond
          (script
-          (exwm-blocks--handle-shell-process name script)
+          (exwm-blocks--handle-shell-process name script filter)
           `(gethash ',name exwm-blocks--values))
          ((eq name 'battery-emacs)
           (display-battery-mode)
