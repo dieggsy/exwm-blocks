@@ -60,9 +60,9 @@ determine the script to call if :script and :elisp are omitted."
           `(lambda ()
              (interactive)
              (start-process-shell-command
-              script
+              ,script
               nil
-              script))
+              ,script))
         (let ((func
                `(lambda ()
                   (interactive)
