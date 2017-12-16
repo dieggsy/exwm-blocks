@@ -1,3 +1,4 @@
+(require 'cl-lib)
 (require 'time)
 (require 'battery)
 (require 's)
@@ -7,13 +8,6 @@
 (defgroup exwm-blocks nil
   "Echo area status bar for exwm."
   :group 'exwm)
-
-;; (defcustom exwm-blocks-propertize 'all
-;;   "Which part of the block to propertize."
-;;   :group 'exwm-blocks
-;;   :type '(choice (const :tag "Whole block" all)
-;;                  (const :tag "Only icon" icon)
-;;                  (const :tag "Only text" text)))
 
 (defcustom exwm-blocks-adjust -2
   "Amount to adjust exwm-blocks status by."
@@ -52,6 +46,17 @@ determine the script to call if :script and :elisp are omitted."
 (defvar exwm-blocks--values (make-hash-table))
 
 (defvar exwm-blocks--timers (make-hash-table))
+
+;; (cl-defun exwm-blocks--make-filter (filter block)
+;;   (cond ((not filter)
+;;          `(lambda (_ out)
+;;             (puthash ',block (string-trim out) exwm-blocks--values)))
+;;         ((symbolp filter)
+;;          (symbol-value filter))
+;;         ((and (consp func) (or (eq (car func) 'function)
+;;                                (eq (car func) 'quote)))
+;;          (cadr func))
+;;         (t )))
 
 (cl-defun exwm-blocks-exec (&key block name script filter)
   (declare (indent defun))
