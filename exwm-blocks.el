@@ -47,16 +47,24 @@ determine the script to call if :script and :elisp are omitted."
 
 (defvar exwm-blocks--timers (make-hash-table))
 
-;; (cl-defun exwm-blocks--make-filter (filter block)
-;;   (cond ((not filter)
-;;          `(lambda (_ out)
-;;             (puthash ',block (string-trim out) exwm-blocks--values)))
-;;         ((symbolp filter)
-;;          (symbol-value filter))
-;;         ((and (consp func) (or (eq (car func) 'function)
-;;                                (eq (car func) 'quote)))
-;;          (cadr func))
-;;         (t )))
+(cl-defmacro exwm-blocks--make-filter (proc filter block)
+  (when (or filter block)
+    `(set-process-filter
+      ,proc
+      ,(cond ((and filter (symbolp filter))
+              (symbol-value filter))
+             ((and (consp filter) (or (eq (car filter) 'function)
+                                      (eq (car filter) 'quote)))
+              (cadr filter))
+             ((functionp filter)
+              filter)
+             (t
+              `(lambda (<proc> <out>)
+                 ,(if block
+                      `(progn
+                         (puthash ,block ,(or filter '(string-trim <out>)) exwm-blocks--values)
+                         (exwm-blocks-update))
+                    ,filter)))))))
 
 (cl-defun exwm-blocks-exec (&key block name script filter)
   (declare (indent defun))
@@ -76,16 +84,7 @@ determine the script to call if :script and :elisp are omitted."
                           ,(or name script)
                           nil
                           ,script)))
-                    ,(cond (filter
-                            `(set-process-filter proc ,filter))
-                           (block
-                               `(set-process-filter
-                                 proc
-                                 (lambda (_ out)
-                                   (puthash ',block
-                                            (string-trim out)
-                                            exwm-blocks--values)
-                                   (exwm-blocks-update)))))))))
+                    (exwm-blocks--make-filter proc ,filter ',block)))))
           (when name
             (puthash name func exwm-blocks--saved-cmds))
           func))))
@@ -143,26 +142,13 @@ determine the script to call if :script and :elisp are omitted."
   (let ((timer (gethash name exwm-blocks--timers)))
     (when timer
       (cancel-timer timer)))
-  (let* ((filter (or (and filter
-                          `(lambda (<proc> <out>)
-                             (puthash ',name
-                                      ,filter
-                                      exwm-blocks--values)
-                             (exwm-blocks-update)))
-                     `(lambda (_ out)
-                        (puthash ',name
-                                 (string-trim out)
-                                 exwm-blocks--values)
-                        (exwm-blocks-update))))
-         (update-fn `(lambda ()
+  (let* ((update-fn `(lambda ()
                        (let ((proc
                               (start-process-shell-command
                                ,block-name-str
                                nil
                                ,script)))
-                         (set-process-filter
-                          proc
-                          ,filter)))))
+                         (exwm-blocks--make-filter proc ,filter ',name)))))
     (puthash name
              (run-at-time 0 interval update-fn)
              exwm-blocks--timers)))
