@@ -81,7 +81,9 @@ determine the script to call if :script and :elisp are omitted."
                   (interactive)
                   (let ((proc
                          (start-process-shell-command
-                          ,(or name script)
+                          ,(if name
+                               (concat "exwm-blocks: " (symbol-name name))
+                             script)
                           nil
                           ,script)))
                     (exwm-blocks--make-filter proc ,filter ',block)))))
@@ -145,7 +147,7 @@ determine the script to call if :script and :elisp are omitted."
   (let* ((update-fn `(lambda ()
                        (let ((proc
                               (start-process-shell-command
-                               ,block-name-str
+                               ,(concat "exwm-blocks: " (symbol-name name))
                                nil
                                ,script)))
                          (exwm-blocks--make-filter proc ,filter ',name)))))
@@ -191,8 +193,7 @@ determine the script to call if :script and :elisp are omitted."
                           (list :foreground foreground))
                          (background
                           (list :background background)))))
-         (map (exwm-blocks-create-map bindings name))
-         (block-name-str (concat "exwm-blocks-" (symbol-name name))))
+         (map (exwm-blocks-create-map bindings name)))
     `(propertize
       (format
        "%s%s%s"
