@@ -108,34 +108,59 @@ determine the script to call if :script and :elisp are omitted."
      (when exwm-blocks-mode
        (exwm-blocks-update))))
 
-(defun exwm-blocks-create-map (bindings block)
+(defun exwm-blocks--make-callable (x &optional block)
+  (cond ((and (listp x) (eq (car x) 'exec))
+         (let* ((args (cdr x))
+                (script-pos (cl-position-if #'stringp args)))
+           (when script-pos
+             (setf (nthcdr script-pos args) (cons :script (nthcdr script-pos args))))
+           (apply #'exwm-blocks-exec args)))
+        ((and (listp x) (eq (car x) 'exec*))
+         (let* ((args (cdr x))
+                (script-pos (cl-position-if #'stringp args)))
+           (when script-pos
+             (setf (nthcdr script-pos args) (cons :script (nthcdr script-pos args))))
+           (apply #'exwm-blocks-exec (append args `(:block ,block)))))
+        ((symbolp x)
+         (symbol-value x))
+        ((functionp x)
+         x)
+        ((and (consp x) (or (eq (car x) 'function)
+                            (eq (car x) 'quote)))
+         (cadr x))
+        (t
+         `(lambda ()
+            (interactive)
+            ,x))))
+
+(defun exwm-blocks--create-map (bindings block)
   (let ((map (make-sparse-keymap)))
     (cl-loop
      for (key func) on bindings by #'cddr
      do  (let* ((key (if (stringp key) (kbd key) key))
-                (func (cond ((and (listp func) (eq (car func) 'exec))
-                             (let* ((args (cdr func))
-                                    (script-pos (cl-position-if #'stringp args)))
-                               (setf (nthcdr script-pos args) (cons :script (nthcdr script-pos args)))
-                               (apply #'exwm-blocks-exec args)))
-                            ((and (listp func) (eq (car func) 'exec*))
-                             (let* ((args (cdr func))
-                                    (script-pos (cl-position-if #'stringp args)))
-                               (setf (nthcdr script-pos args) (cons :script (nthcdr script-pos args)))
-                               (apply #'exwm-blocks-exec (append args `(:block ,block)))))
-                            ((symbolp func)
-                             (symbol-value func))
-                            ((functionp func)
-                             func)
-                            ((and (consp func) (or (eq (car func) 'function)
-                                                   (eq (car func) 'quote)))
-                             (cadr func))
-                            (t
-                             `(lambda ()
-                                (interactive)
-                                ,func)))))
+                (func (exwm-blocks--make-callable func block)))
            (define-key map key func)))
     map))
+
+(defmacro exwm-blocks-define-keys (&rest bindings)
+  "Define exwm keys using exwm-input-set-key.
+
+FUNC can be:
+
+- var, quoted symbol, or sharp quoted symbol
+- lambda
+- arbitrary sexp, which is wrapped in an interactive lambda
+- Sexp of form (exec CMD &optional ASYNC), where CMD is a shell
+  command. This gets converted into an interactive lambda wrapper
+  around `start-process-shell-command' if ASYNC is nil or
+  omitted, or `call-process-shell-command' if ASYNC is non-nil.
+
+\(fn [KEY FUNC]...)"
+  (cl-loop for (key func) on bindings
+           by #'cddr
+           do (let* ((key (if (stringp key) (kbd key) key))
+                     (func (exwm-blocks--make-callable func)))
+                (exwm-input-set-key key func))))
 
 (defun exwm-block-value (value)
   (gethash value exwm-blocks--values))
@@ -193,7 +218,7 @@ determine the script to call if :script and :elisp are omitted."
                           (list :foreground foreground))
                          (background
                           (list :background background)))))
-         (map (exwm-blocks-create-map bindings name)))
+         (map (exwm-blocks--create-map bindings name)))
     `(propertize
       (format
        "%s%s%s"
